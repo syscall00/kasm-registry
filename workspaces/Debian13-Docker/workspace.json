@@ -24,7 +24,7 @@
   ],
   "compatibility": [
     {
-      "version": "1.17.x",
+      "version": "1.18.x",
       "image": "ghcr.io/syscall00/debian13-docker:latest",
       "uncompressed_size_mb": 512,
       "available_tags": [
