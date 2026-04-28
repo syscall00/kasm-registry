@@ -19,7 +19,8 @@
   ],
   "friendly_name": "Debian 13 with Docker",
   "architecture": [
-    "amd64"
+    "amd64",
+    "arm64"
   ],
   "compatibility": [
     {
