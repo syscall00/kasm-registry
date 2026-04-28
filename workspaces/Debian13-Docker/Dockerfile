@@ -1,4 +1,4 @@
-FROM kasmweb/core-debian-bookworm:1.17.0
+FROM kasmweb/core-debian-bookworm:1.18.0
 
 ENV USER=kasm-user
 
@@ -42,7 +42,7 @@ start_dockerd() {
 }
 
 start_dockerd || true
-exec /dockerstartup/custom_startup.sh "$@"
+exec /dockerstartup/vnc_startup.sh "$@"
 EOF
 
 RUN chmod +x /usr/local/bin/kasm_docker_startup.sh
