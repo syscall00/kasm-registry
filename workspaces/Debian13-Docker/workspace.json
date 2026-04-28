@@ -1,6 +1,6 @@
 {
   "description": "Debian 13 with Docker and sudo access for a regular user.",
-  "docker_registry": "https://ghcr.io",
+  "docker_registry": "https://ghcr.io/v2/",
   "image_src": "debian13-docker.svg",
   "run_config": {
     "hostname": "kasm"
