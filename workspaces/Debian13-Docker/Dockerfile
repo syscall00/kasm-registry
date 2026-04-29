@@ -5,18 +5,27 @@ USER root
 RUN install -m 0755 -d /etc/apt/keyrings && \
     curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc && \
     chmod a+r /etc/apt/keyrings/docker.asc && \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian trixie stable" > /etc/apt/sources.list.d/docker.list
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian trixie stable" > /etc/apt/sources.list.d/docker.list && \
+    curl -fsSL https://packages.microsoft.com/keys/microsoft.asc -o /etc/apt/keyrings/microsoft.asc && \
+    chmod a+r /etc/apt/keyrings/microsoft.asc && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/microsoft.asc] https://packages.microsoft.com/repos/code stable main" > /etc/apt/sources.list.d/vscode.list
 
 RUN apt-get update && apt-get install -y \
     sudo \
     nano \
     chromium \
+    firefox-esr \
+    code \
+    nodejs \
+    npm \
     docker-ce \
     docker-ce-cli \
     containerd.io \
     docker-buildx-plugin \
     docker-compose-plugin \
     && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g opencode-ai
 
 RUN usermod -aG docker kasm-user && \
     echo "kasm-user ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/90-kasm-user && \
