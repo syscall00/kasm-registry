@@ -19,7 +19,7 @@
     {
       "version": "1.18.x",
       "image": "ghcr.io/syscall00/k8s-terminal:1.18.0",
-      "uncompressed_size_mb": 2979,
+      "uncompressed_size_mb": 2997,
       "available_tags": [
         "1.18.0"
       ]
@@ -27,7 +27,7 @@
     {
       "version": "1.19.x",
       "image": "ghcr.io/syscall00/k8s-terminal:1.19.0",
-      "uncompressed_size_mb": 3054,
+      "uncompressed_size_mb": 3071,
       "available_tags": [
         "1.19.0",
         "latest"
