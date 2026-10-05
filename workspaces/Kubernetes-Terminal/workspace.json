@@ -1,11 +1,19 @@
 {
-  "description": "Minimal Kubernetes workspace: a terminal with k9s, kubectl and kubens, nothing else. Add your kubeconfig to ~/.kube/config to get started.",
+  "description": "Kubernetes workspace: one maximized terminal filling the screen, with k9s, kubectl and kubens ready. Create ~/.kube/config inside the workspace to connect to a cluster.",
   "docker_registry": "https://ghcr.io/v2/",
   "image_src": "kubernetes-terminal.svg",
   "run_config": {
     "hostname": "kasm"
   },
-  "notes": "Cluster credentials are not included, create ~/.kube/config inside the workspace. k9s is a full-screen TUI and needs a real terminal, so run it from the terminal window rather than from a Kasm exec.",
+  "exec_config": {
+    "go": {
+      "cmd": "bash -c '/dockerstartup/custom_startup.sh --go --url \"$KASM_URL\"'"
+    },
+    "assign": {
+      "cmd": "bash -c '/dockerstartup/custom_startup.sh --assign --url \"$KASM_URL\"'"
+    }
+  },
+  "notes": "No desktop, no panel: the session is a single maximized terminal, and it reopens if closed. Credentials are not included, create ~/.kube/config inside the workspace. Open a second terminal with Ctrl+Shift+T, or run xfce4-terminal & from the shell.",
   "categories": [
     "Development",
     "Utility"
@@ -19,7 +27,7 @@
     {
       "version": "1.18.x",
       "image": "ghcr.io/syscall00/k8s-terminal:1.18.0",
-      "uncompressed_size_mb": 2997,
+      "uncompressed_size_mb": 2989,
       "available_tags": [
         "1.18.0"
       ]
@@ -27,7 +35,7 @@
     {
       "version": "1.19.x",
       "image": "ghcr.io/syscall00/k8s-terminal:1.19.0",
-      "uncompressed_size_mb": 3071,
+      "uncompressed_size_mb": 3063,
       "available_tags": [
         "1.19.0",
         "latest"

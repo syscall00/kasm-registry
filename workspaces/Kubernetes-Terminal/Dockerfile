@@ -121,31 +121,75 @@ RUN set -eux; \
     install -m 0755 kubens /usr/local/bin/kubens; \
     rm -rf "${archive}" checksums.txt kubens.checksum kubens
 
-# A terminal is the whole point of this workspace, and the Kasm base image only
-# starts a bare XFCE session. Autostart one so the user lands in a shell.
-# /etc/xdg/autostart is already where the base image registers its own session
-# components, so XFCE picks this up. x-terminal-emulator resolves through the
-# alternatives system, which keeps this correct whichever terminal the base
-# image happens to ship.
+# Terminal-only session, the way kasmweb/terminal builds it.
 #
-# Terminal is left false on purpose: it means "run this inside a terminal", so
-# setting it on a terminal emulator would nest one inside another.
+# Removing the XFCE panel is what actually gets rid of the desktop: the session
+# tries to start xfce4-panel, the binary is gone, and it carries on without it.
+# dpkg --purge rather than deleting files by hand, so the package database
+# stays consistent; --force-depends is needed because xfce4 depends on the
+# panel. The window manager (xfwm4) stays, which is what makes the maximized
+# terminal below work. Costs about 8 MB.
+#
+# The presence test asks for the status field rather than using "dpkg-query -W",
+# which also exits 0 for a package that is not installed and so would enter the
+# purge branch every time. The purge itself is idempotent, but then the message
+# in the else branch could never be true.
 RUN set -eux; \
-    terminal=""; \
-    for candidate in x-terminal-emulator xfce4-terminal xterm; do \
-        if command -v "${candidate}" > /dev/null 2>&1; then \
-            terminal="${candidate}"; \
-            break; \
-        fi; \
-    done; \
-    if [ -z "${terminal}" ]; then \
-        echo "no terminal emulator in base image, this workspace needs one" >&2; \
-        exit 1; \
+    if [ "$(dpkg-query -W -f='${db:Status-Status}' xfce4-panel 2>/dev/null)" = "installed" ]; then \
+        dpkg --purge --force-depends xfce4-panel; \
+    else \
+        echo "xfce4-panel not installed, panel already absent"; \
     fi; \
-    mkdir -p /etc/xdg/autostart; \
-    printf '[Desktop Entry]\nType=Application\nName=Terminal\nComment=Kubernetes CLI\nExec=%s\nTerminal=false\n' \
-        "${terminal}" > /etc/xdg/autostart/k8s-terminal.desktop; \
-    chmod 0644 /etc/xdg/autostart/k8s-terminal.desktop
+    rm -rf /var/lib/apt/lists/*
+
+# vnc_startup.sh runs /dockerstartup/custom_startup.sh in the background once
+# the session is up, and restarts it if it ever exits, so this has to be a loop
+# that never returns. It is also the target of the registry's exec_config.
+# Everything it does is open one terminal that fills the screen, and reopen it
+# if the user closes it.
+#
+# --maximize rather than --fullscreen on purpose: a real fullscreen terminal
+# swallows the title bar, so there is no way back out of it with the mouse,
+# while a maximized one with no borders and no menubar looks identical and can
+# still be un-maximized.
+RUN cat <<'EOF' > /dockerstartup/custom_startup.sh
+#!/usr/bin/env bash
+set -e
+
+TERMINAL_ARGS=(--maximize --hide-borders --hide-menubar --hide-scrollbar)
+
+# Kasm's "go" and "assign" actions exec into the container with --go/--assign.
+# By then the session is already up and the loop below owns the terminal, so
+# there is nothing to start and starting one would just pile up windows.
+case "${1:-}" in
+    --go|--assign)
+        exit 0
+        ;;
+esac
+
+while true; do
+    if pgrep -x xfce4-terminal > /dev/null 2>&1; then
+        sleep 1
+        continue
+    fi
+
+    # Both are Kasm's own readiness signals: the first filters input until the
+    # session is usable, the second marks the desktop ready. Neither is allowed
+    # to kill the loop. Under "set -e" a non-zero from either would abort the
+    # script and leave the user with no terminal at all, and "filter_ready"
+    # does exit non-zero when its filter is not configured.
+    /usr/bin/filter_ready || true
+    /usr/bin/desktop_ready || true
+
+    cd "${HOME:-/home/kasm-user}"
+    # Foreground, so this loop only comes back around once the terminal is
+    # actually gone rather than guessing with a race.
+    xfce4-terminal "${TERMINAL_ARGS[@]}" || true
+    sleep 1
+done
+EOF
+
+RUN chmod 0755 /dockerstartup/custom_startup.sh
 
 # kubectl creates this file on demand, but only if the directory is writable.
 RUN mkdir -p /home/kasm-user/.kube && \
