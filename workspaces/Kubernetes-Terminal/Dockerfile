@@ -49,24 +49,40 @@ RUN set -eux; \
         rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb; \
     fi
 
-# BuildKit's TARGETARCH does not match every upstream naming scheme: k9s uses
-# amd64, while kubectl and kubens use x86_64. Resolve once, reuse in each step.
+# The three upstreams do not agree on how to name an architecture, and only
+# one of them is the odd one out:
+#
+#   kubectl  GOARCH-style : amd64, arm64
+#   k9s      GOARCH-style : amd64, arm64
+#   kubens   Debian-style : x86_64, arm64
+#
+# So there are two names to carry around, and DEB_ARCH must be used for kubens
+# only. Pointing kubectl at DEB_ARCH builds fine on arm64 and fails only on
+# amd64, with dl.k8s.io answering 404 and curl exiting 22.
 RUN case "${TARGETARCH}" in \
-        amd64) K8S_ARCH=amd64; DEB_ARCH=x86_64 ;; \
-        arm64) K8S_ARCH=arm64; DEB_ARCH=arm64 ;; \
+        amd64) GO_ARCH=amd64; DEB_ARCH=x86_64 ;; \
+        arm64) GO_ARCH=arm64; DEB_ARCH=arm64 ;; \
         *) echo "unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac && \
-    printf 'K8S_ARCH=%s\nDEB_ARCH=%s\n' "${K8S_ARCH}" "${DEB_ARCH}" > /etc/k8s-arch.env
+    printf 'GO_ARCH=%s\nDEB_ARCH=%s\n' "${GO_ARCH}" "${DEB_ARCH}" > /etc/k8s-arch.env
 
 # The checksum files all use the "sha256  filename" layout, except dl.k8s.io which
 # ships the bare hash and needs the name appended. Each step below also asserts
 # that the filter matched exactly one line: sha256sum exits 0 on empty input, so
 # a wrong architecture name would otherwise skip the check without failing.
+#
+# Every download echoes its URL and gets an explicit destination, because curl
+# -f turns a 404 into a bare "exit code: 22" that says nothing about which URL
+# or which status was at fault.
 RUN set -eux; \
     . /etc/k8s-arch.env; \
     cd /tmp; \
-    curl -fsSLO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${DEB_ARCH}/kubectl"; \
-    curl -fsSLO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${DEB_ARCH}/kubectl.sha256"; \
+    url="https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${GO_ARCH}/kubectl"; \
+    echo "GET ${url}"; \
+    curl -fsSL --retry 3 --retry-delay 5 -o kubectl "${url}"; \
+    url="https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${GO_ARCH}/kubectl.sha256"; \
+    echo "GET ${url}"; \
+    curl -fsSL --retry 3 --retry-delay 5 -o kubectl.sha256 "${url}"; \
     printf '%s  kubectl\n' "$(cat kubectl.sha256)" > kubectl.checksum; \
     test "$(wc -l < kubectl.checksum)" -eq 1; \
     sha256sum --check --strict kubectl.checksum; \
@@ -76,9 +92,12 @@ RUN set -eux; \
 RUN set -eux; \
     . /etc/k8s-arch.env; \
     cd /tmp; \
-    archive="k9s_Linux_${K8S_ARCH}.tar.gz"; \
-    curl -fsSLO "https://github.com/derailed/k9s/releases/download/${K9S_VERSION}/${archive}"; \
-    curl -fsSLO "https://github.com/derailed/k9s/releases/download/${K9S_VERSION}/checksums.sha256"; \
+    archive="k9s_Linux_${GO_ARCH}.tar.gz"; \
+    url="https://github.com/derailed/k9s/releases/download/${K9S_VERSION}/${archive}"; \
+    echo "GET ${url}"; \
+    curl -fsSL --retry 3 --retry-delay 5 -o "${archive}" "${url}"; \
+    curl -fsSL --retry 3 --retry-delay 5 -o checksums.sha256 \
+        "https://github.com/derailed/k9s/releases/download/${K9S_VERSION}/checksums.sha256"; \
     awk -v name="${archive}" '$2 == name' checksums.sha256 > k9s.checksum; \
     test "$(wc -l < k9s.checksum)" -eq 1; \
     sha256sum --check --strict k9s.checksum; \
@@ -90,8 +109,11 @@ RUN set -eux; \
     . /etc/k8s-arch.env; \
     cd /tmp; \
     archive="kubens_${KUBENS_VERSION}_linux_${DEB_ARCH}.tar.gz"; \
-    curl -fsSLO "https://github.com/ahmetb/kubectx/releases/download/${KUBENS_VERSION}/${archive}"; \
-    curl -fsSLO "https://github.com/ahmetb/kubectx/releases/download/${KUBENS_VERSION}/checksums.txt"; \
+    url="https://github.com/ahmetb/kubectx/releases/download/${KUBENS_VERSION}/${archive}"; \
+    echo "GET ${url}"; \
+    curl -fsSL --retry 3 --retry-delay 5 -o "${archive}" "${url}"; \
+    curl -fsSL --retry 3 --retry-delay 5 -o checksums.txt \
+        "https://github.com/ahmetb/kubectx/releases/download/${KUBENS_VERSION}/checksums.txt"; \
     awk -v name="${archive}" '$2 == name' checksums.txt > kubens.checksum; \
     test "$(wc -l < kubens.checksum)" -eq 1; \
     sha256sum --check --strict kubens.checksum; \
