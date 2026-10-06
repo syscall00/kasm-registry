@@ -1,5 +1,5 @@
 {
-  "description": "Kubernetes workspace: one maximized terminal filling the screen, with k9s, kubectl and kubens ready. Create ~/.kube/config inside the workspace to connect to a cluster.",
+  "description": "Kubernetes workspace: one maximized terminal filling the screen, with k9s, kubectl, kubens and the Argo CD CLI ready. Create ~/.kube/config inside the workspace to connect to a cluster.",
   "docker_registry": "https://ghcr.io/v2/",
   "image_src": "kubernetes-terminal.svg",
   "run_config": {
@@ -27,7 +27,7 @@
     {
       "version": "1.18.x",
       "image": "ghcr.io/syscall00/k8s-terminal:1.18.0",
-      "uncompressed_size_mb": 2989,
+      "uncompressed_size_mb": 3226,
       "available_tags": [
         "1.18.0"
       ]
@@ -35,7 +35,7 @@
     {
       "version": "1.19.x",
       "image": "ghcr.io/syscall00/k8s-terminal:1.19.0",
-      "uncompressed_size_mb": 3063,
+      "uncompressed_size_mb": 3300,
       "available_tags": [
         "1.19.0",
         "latest"

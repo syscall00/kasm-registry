@@ -18,6 +18,7 @@ ARG TARGETARCH
 ARG KUBECTL_VERSION=v1.37.1
 ARG K9S_VERSION=v0.51.0
 ARG KUBENS_VERSION=v0.11.0
+ARG ARGOCD_VERSION=v3.5.3
 
 USER root
 
@@ -121,6 +122,29 @@ RUN set -eux; \
     install -m 0755 kubens /usr/local/bin/kubens; \
     rm -rf "${archive}" checksums.txt kubens.checksum kubens
 
+# The Argo CD CLI, for reading Application state without leaving the workspace.
+# Its releases are named by GOARCH like kubectl and k9s, so it takes GO_ARCH, and
+# its checksums live in cli_checksums.txt in the same layout as the others.
+#
+# Budget for this one: the binary is 226 MB on arm64 and 238 MB on amd64, more
+# than k9s, kubectl and kubens put together, because it embeds kubectl and
+# helm. That is the price of the GitOps side of the workflow living in the
+# workspace.
+RUN set -eux; \
+    . /etc/k8s-arch.env; \
+    cd /tmp; \
+    binary="argocd-linux-${GO_ARCH}"; \
+    url="https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/${binary}"; \
+    echo "GET ${url}"; \
+    curl -fsSL --retry 3 --retry-delay 5 -o "${binary}" "${url}"; \
+    curl -fsSL --retry 3 --retry-delay 5 -o cli_checksums.txt \
+        "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/cli_checksums.txt"; \
+    awk -v name="${binary}" '$2 == name' cli_checksums.txt > argocd.checksum; \
+    test "$(wc -l < argocd.checksum)" -eq 1; \
+    sha256sum --check --strict argocd.checksum; \
+    install -m 0755 "${binary}" /usr/local/bin/argocd; \
+    rm -rf "${binary}" cli_checksums.txt argocd.checksum
+
 # Terminal-only session, the way kasmweb/terminal builds it.
 #
 # Removing the XFCE panel is what actually gets rid of the desktop: the session
@@ -201,6 +225,8 @@ WORKDIR /home/kasm-user
 # Catch a binary that does not run on this arch/libc here, rather than in the
 # user's session. kubens is only checked for executability: it refuses to do
 # anything useful without a kubeconfig, so --help is not a reliable probe.
+# argocd --client likewise needs no server.
 RUN kubectl version --client=true && \
     k9s version && \
+    argocd version --client && \
     test -x /usr/local/bin/kubens
