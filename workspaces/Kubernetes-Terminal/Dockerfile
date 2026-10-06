@@ -19,6 +19,7 @@ ARG KUBECTL_VERSION=v1.37.1
 ARG K9S_VERSION=v0.51.0
 ARG KUBENS_VERSION=v0.11.0
 ARG ARGOCD_VERSION=v3.5.3
+ARG HELM_VERSION=v4.3.0
 
 USER root
 
@@ -145,6 +146,33 @@ RUN set -eux; \
     install -m 0755 "${binary}" /usr/local/bin/argocd; \
     rm -rf "${binary}" cli_checksums.txt argocd.checksum
 
+# Helm, for working with charts from the terminal. Two things differ from the
+# steps above:
+#
+# It comes from get.helm.sh, not the GitHub release. Helm's releases publish
+# only GPG-signed .asc assets now and no plain tarballs, so the release URL
+# 404s; get.helm.sh still serves the tarball with a per-file .sha256sum next
+# to it, which is enough to keep the same verify-then-install shape.
+#
+# And the binary is not at the root of the tarball. It sits in
+# linux-<arch>/helm, so extracting a member called "helm" fails with
+# "not found in archive". GO_ARCH names both the archive and that directory.
+RUN set -eux; \
+    . /etc/k8s-arch.env; \
+    cd /tmp; \
+    archive="helm-${HELM_VERSION}-linux-${GO_ARCH}.tar.gz"; \
+    url="https://get.helm.sh/${archive}"; \
+    echo "GET ${url}"; \
+    curl -fsSL --retry 3 --retry-delay 5 -o "${archive}" "${url}"; \
+    curl -fsSL --retry 3 --retry-delay 5 -o helm.sha256sum "${url}.sha256sum"; \
+    awk -v name="${archive}" '$2 == name' helm.sha256sum > helm.checksum; \
+    test "$(wc -l < helm.checksum)" -eq 1; \
+    sha256sum --check --strict helm.checksum; \
+    member="linux-${GO_ARCH}/helm"; \
+    tar -xzf "${archive}" "${member}"; \
+    install -m 0755 "${member}" /usr/local/bin/helm; \
+    rm -rf "${archive}" helm.sha256sum helm.checksum "linux-${GO_ARCH}"
+
 # Terminal-only session, the way kasmweb/terminal builds it.
 #
 # Removing the XFCE panel is what actually gets rid of the desktop: the session
@@ -225,8 +253,10 @@ WORKDIR /home/kasm-user
 # Catch a binary that does not run on this arch/libc here, rather than in the
 # user's session. kubens is only checked for executability: it refuses to do
 # anything useful without a kubeconfig, so --help is not a reliable probe.
-# argocd --client likewise needs no server.
+# argocd has a --client form that needs no server. Helm 4 dropped --client
+# entirely, and plain "helm version" is already cluster-free and exits 0.
 RUN kubectl version --client=true && \
     k9s version && \
     argocd version --client && \
+    helm version --short && \
     test -x /usr/local/bin/kubens
